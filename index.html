@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>SLEEP IMMEDIATLY</title>
-  <meta name="description" content="guys this took too long to make. SOME vrchat worlds go hard with this.">
+  <title>Quiet hours</title>
+  <meta name="description" content="A night city, slow music, and nothing else.">
   <meta name="theme-color" content="#0a0f1e">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='16' fill='%230a0f1e'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23f2c98a'/%3E%3C/svg%3E">
 
@@ -12,6 +12,110 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+
+  <!-- City / Upload additions -->
+  <style id="upload-css">
+    /* ---- City / Upload switch in the dock ---- */
+    .modes { display: flex; gap: 0.2rem; padding: 0.2rem; margin-right: 0.35rem; border: 1px solid var(--line); border-radius: 999px; }
+    .mode {
+      padding: 0.5rem 0.85rem; font: 500 0.8rem/1 var(--sans); letter-spacing: 0.02em;
+      color: var(--mist); background: transparent; border: 1px solid transparent; border-radius: 999px;
+      cursor: pointer; transition: color 0.3s, background 0.3s, border-color 0.3s, box-shadow 0.3s;
+    }
+    .mode:hover { color: var(--moon); }
+    .mode[aria-pressed="true"] {
+      color: var(--lamp); background: rgba(242, 201, 138, 0.14);
+      border-color: rgba(242, 201, 138, 0.45); box-shadow: 0 0 18px rgba(242, 201, 138, 0.22);
+    }
+
+    /* keep the dock in view while the upload window is open */
+    body.idle.upload-open .dock { opacity: 1; transform: translateX(-50%); pointer-events: auto; }
+    body.idle.upload-open { cursor: auto; }
+
+    /* ---- Upload window (frosted glass) ---- */
+    .up-win {
+      position: fixed; left: 0; top: 0; z-index: 8;
+      width: min(320px, calc(100vw - 1.5rem)); padding: 0.35rem 0.9rem 1.1rem;
+      color: var(--moon);
+      background: linear-gradient(145deg, rgba(255, 255, 255, 0.17), rgba(255, 255, 255, 0.05));
+      border: 1px solid rgba(255, 255, 255, 0.22); border-radius: 30px;
+      -webkit-backdrop-filter: blur(30px) saturate(1.7); backdrop-filter: blur(30px) saturate(1.7);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -1px 0 rgba(255, 255, 255, 0.06);
+      animation: upIn 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    .up-win[hidden] { display: none; }
+    .up-win.dragging { box-shadow: 0 34px 80px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.4); }
+    @keyframes upIn { from { opacity: 0; transform: translateY(10px) scale(0.96); } to { opacity: 1; transform: none; } }
+
+    .up-grip { position: relative; display: flex; align-items: center; justify-content: center; height: 40px; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+    .up-win.dragging .up-grip { cursor: grabbing; }
+    .up-pill { width: 38px; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.35); }
+    .up-x {
+      position: absolute; right: -0.25rem; top: 50%; display: grid; place-items: center; width: 28px; height: 28px; padding: 0;
+      color: var(--moon); background: rgba(255, 255, 255, 0.12); border: 0; border-radius: 50%; cursor: pointer; transform: translateY(-50%); transition: background 0.3s;
+    }
+    .up-x:hover { background: rgba(255, 255, 255, 0.22); }
+    .up-x svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+
+    .up-body {
+      display: grid; gap: 0.8rem; padding: 1.1rem; text-align: center;
+      border: 1px dashed rgba(255, 255, 255, 0.24); border-radius: 22px;
+      transition: border-color 0.3s, background 0.3s;
+    }
+    .up-win.over .up-body { border-color: var(--lamp); background: rgba(242, 201, 138, 0.08); }
+
+    .up-main {
+      width: 100%; padding: 0.95rem 1rem; font: 500 1rem/1 var(--sans); letter-spacing: 0.02em;
+      color: var(--ink); background: rgba(233, 231, 241, 0.94); border: 0; border-radius: 20px; cursor: pointer; transition: background 0.3s, opacity 0.3s;
+    }
+    .up-main:hover { background: #fff; }
+    .up-main:disabled { opacity: 0.5; cursor: default; }
+    .up-sub, .up-note, .up-name { margin: 0; font-size: 0.8rem; line-height: 1.5; color: var(--mist); }
+    .up-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--moon); }
+    .up-note { user-select: text; -webkit-user-select: text; overflow-wrap: anywhere; }
+    .up-note:empty { display: none; }
+
+    .up-prog { display: grid; gap: 0.45rem; }
+    .up-prog[hidden], .up-share[hidden] { display: none; }
+    .up-bar { height: 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.16); overflow: hidden; }
+    .up-bar i { display: block; width: 0; height: 100%; background: var(--lamp); border-radius: 4px; transition: width 0.25s ease; }
+    .up-bar.busy i { animation: upPulse 1.4s ease-in-out infinite; }
+    @keyframes upPulse { 50% { opacity: 0.55; } }
+
+    .up-share {
+      width: 100%; padding: 0.85rem 1rem; font: 500 0.95rem/1 var(--sans); letter-spacing: 0.04em;
+      color: var(--moon); background: transparent; border: 1px solid rgba(233, 231, 241, 0.4); border-radius: 20px; cursor: pointer;
+      transition: border-color 0.4s, box-shadow 0.4s, background 0.4s, color 0.4s;
+    }
+    .up-share:hover { border-color: var(--lamp); background: rgba(242, 201, 138, 0.08); box-shadow: 0 0 30px rgba(242, 201, 138, 0.16); }
+    .up-share.copied { color: var(--lamp); border-color: var(--lamp); }
+
+    /* ---- Background picker and music list (settings panel) ---- */
+    .panel { max-height: calc(100vh - 9rem); overflow-y: auto; }
+    .select {
+      width: 100%; padding: 0.55rem 0.8rem; font: 400 0.85rem var(--sans); color: var(--moon);
+      background: rgba(255, 255, 255, 0.08); border: 1px solid var(--line); border-radius: 12px; color-scheme: dark;
+    }
+    .count { color: var(--mist); font-weight: 400; }
+    .tracks { display: grid; gap: 0.15rem; max-height: 8.5rem; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+    .tracks button {
+      width: 100%; padding: 0.4rem 0.6rem; overflow: hidden; text-align: left; text-overflow: ellipsis; white-space: nowrap;
+      font: 400 0.82rem/1.3 var(--sans); color: var(--mist); background: transparent; border: 0; border-radius: 10px; cursor: pointer;
+      transition: background 0.25s, color 0.25s;
+    }
+    .tracks button:hover { color: var(--moon); background: rgba(255, 255, 255, 0.08); }
+    .tracks button[aria-current="true"] { color: var(--lamp); }
+
+    @media (max-width: 680px) {
+      .mode { padding: 0.42rem 0.6rem; font-size: 0.75rem; }
+      .modes { margin-right: 0; padding: 0.15rem; }
+      #mute, #fs { display: none; }          /* phones use their own volume keys; room is tight */
+      .transport .icon-btn { width: 38px; height: 38px; }
+      .transport .play-btn { width: 44px; height: 44px; }
+      .meta { min-width: 0; }
+    }
+  </style>
 </head>
 <body class="intro-open">
 
@@ -60,6 +164,10 @@
     </div>
 
     <div class="tools">
+      <div class="modes" role="group" aria-label="View">
+        <button class="mode" id="modeCity" type="button" aria-pressed="true">City</button>
+        <button class="mode" id="modeUpload" type="button" aria-pressed="false" aria-controls="upWin">Upload</button>
+      </div>
       <button class="icon-btn" id="mute" type="button" aria-label="Mute" title="Mute (M)">
         <svg class="i-vol" viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5zM15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
         <svg class="i-muted" viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5zM16 9.5l5 5M21 9.5l-5 5"/></svg>
@@ -89,8 +197,18 @@
       </div>
 
       <div class="row">
+        <label class="label" for="bgSelect">Background</label>
+        <select class="select" id="bgSelect"><option>Night city</option></select>
+      </div>
+
+      <div class="row">
         <label class="label" for="dim">Dim the video</label>
         <input class="slider" id="dim" type="range" min="0" max="80" value="20" step="1">
+      </div>
+
+      <div class="row">
+        <p class="label">Music <span class="count" id="trackCount"></span></p>
+        <ol class="tracks" id="trackList"></ol>
       </div>
 
       <div class="row switches">
@@ -98,14 +216,277 @@
         <label class="switch"><input type="checkbox" id="videoToggle" checked><span class="track"></span>Play the video</label>
       </div>
 
-      <p class="hint keys">Space play or pause · N next · P previous · ← → skip 10 seconds · ↑ ↓ volume · M mute · F full screen</p>
+      <p class="hint keys">Space play or pause · N next · P previous · ← → skip 10 seconds · ↑ ↓ volume · M mute · B next background · F full screen</p>
     </div>
   </div>
+
+  <!-- Upload window -->
+  <section class="up-win" id="upWin" role="dialog" aria-label="Upload a file" hidden>
+    <div class="up-grip" id="upGrip">
+      <span class="up-pill"></span>
+      <button class="up-x" id="upClose" type="button" aria-label="Close">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="up-body">
+      <input type="file" id="upFile" hidden>
+      <button class="up-main" id="upBtn" type="button">Upload</button>
+      <p class="up-sub" id="upSub">or drop a file here</p>
+      <div class="up-prog" id="upProg" hidden>
+        <p class="up-name" id="upName"></p>
+        <div class="up-bar" id="upBarWrap"><i id="upBar"></i></div>
+      </div>
+      <button class="up-share" id="upShare" type="button" hidden>Share</button>
+      <p class="up-note" id="upNote" role="status" aria-live="polite"></p>
+    </div>
+  </section>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <audio id="audio" preload="metadata"></audio>
 
+  <script>
+    /* Only needed if your site uses its own domain instead of name.github.io.
+       Remove the // and fill in your GitHub username and repository name:   */
+    // window.QUIET_REPO = "your-username/your-repo";
+  </script>
   <script src="script.js"></script>
+
+  <!-- City / Upload additions -->
+  <script>
+  (() => {
+    "use strict";
+
+    /* ---------- PERMANENT STORAGE (optional) ----------
+       Fill these in with your own Supabase project to keep uploaded files
+       permanently (see the steps I gave you). Leave them empty and the site
+       falls back to the free temporary hosts below. The anon key is meant to
+       be public, so it is fine to put it here. */
+    const SUPABASE_URL = "";      // e.g. "https://abcdxyz.supabase.co"
+    const SUPABASE_KEY = "";      // the project's anon (or publishable) key
+    const SUPABASE_BUCKET = "files";
+
+    /* Free temporary file hosts. They are tried in order until one accepts the file.
+       "field" is the form field name the host expects; "parse" pulls the direct
+       download link out of the host's reply. Add or reorder hosts here. */
+    const HOSTS = [
+      {
+        name: "tmpfiles", temporary: true, url: "https://tmpfiles.org/api/v1/upload", field: "file",
+        parse: (t) => {
+          const u = JSON.parse(t).data && JSON.parse(t).data.url;
+          return u && u.replace(/^http:/, "https:").replace(/tmpfiles\.org\/(?!dl\/)/, "tmpfiles.org/dl/");
+        },
+      },
+      {
+        name: "uguu", temporary: true, url: "https://uguu.se/upload", field: "files[]",
+        parse: (t) => { const f = JSON.parse(t).files; return f && f[0] && f[0].url; },
+      },
+      {
+        name: "litterbox", temporary: true, url: "https://litterbox.catbox.moe/resources/internals/api.php", field: "fileToUpload",
+        extra: { reqtype: "fileupload", time: "72h" },
+        parse: (t) => (/^https?:\/\//.test(t.trim()) ? t.trim() : null),
+      },
+    ];
+
+    if (SUPABASE_URL && SUPABASE_KEY) {
+      const base = SUPABASE_URL.replace(/\/+$/, "");
+      HOSTS.unshift({
+        name: "supabase", max: 50 * 1024 * 1024,          // free plan allows 50 MB per file
+        raw: (file) => {
+          const safe = file.name.replace(/[^A-Za-z0-9._-]+/g, "_").slice(-80) || "file";
+          const path = Math.random().toString(36).slice(2, 10) + "-" + safe;
+          return {
+            url: `${base}/storage/v1/object/${SUPABASE_BUCKET}/${path}`,
+            headers: {
+              apikey: SUPABASE_KEY, "x-upsert": "false", "Content-Type": file.type || "application/octet-stream",
+              ...(SUPABASE_KEY.startsWith("eyJ") ? { Authorization: "Bearer " + SUPABASE_KEY } : {}),   // older JWT-style anon keys
+            },
+            link: `${base}/storage/v1/object/public/${SUPABASE_BUCKET}/${path}?download=${encodeURIComponent(file.name)}`,
+          };
+        },
+      });
+    }
+
+    const $ = (id) => document.getElementById(id);
+    const body = document.body;
+    const win = $("upWin"), grip = $("upGrip"), fileIn = $("upFile");
+    const btn = $("upBtn"), sub = $("upSub"), prog = $("upProg"), nameEl = $("upName");
+    const bar = $("upBar"), barWrap = $("upBarWrap"), share = $("upShare"), note = $("upNote");
+    const modeCity = $("modeCity"), modeUpload = $("modeUpload"), toastEl = $("toast");
+
+    let busy = false, link = "", placed = false, toastT;
+
+    const toast = (msg) => {
+      toastEl.textContent = msg; toastEl.classList.add("show");
+      clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove("show"), 2600);
+    };
+
+    const size = (n) => n >= 1e9 ? (n / 1e9).toFixed(1) + " GB" : n >= 1e6 ? (n / 1e6).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1e3)) + " KB";
+
+    /* ---------- City / Upload switch ---------- */
+
+    function setMode(mode) {
+      const up = mode === "upload";
+      modeUpload.setAttribute("aria-pressed", String(up));
+      modeCity.setAttribute("aria-pressed", String(!up));
+      body.classList.toggle("upload-open", up);
+      win.hidden = !up;
+      if (up) {
+        if (!placed) { place((innerWidth - win.offsetWidth) / 2, Math.max(16, innerHeight * 0.06)); placed = true; }
+        else place(win.offsetLeft, win.offsetTop);
+      }
+    }
+
+    function openUpload() { if (win.hidden) { setMode("upload"); btn.focus({ preventScroll: true }); } }
+
+    modeCity.addEventListener("click", () => setMode("city"));
+    modeUpload.addEventListener("click", () => { setMode("upload"); btn.focus({ preventScroll: true }); });
+    $("upClose").addEventListener("click", () => { setMode("city"); modeCity.focus({ preventScroll: true }); });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !win.hidden) setMode("city"); });
+
+    /* ---------- Dragging the window ---------- */
+
+    function place(x, y) {
+      const w = win.offsetWidth, h = win.offsetHeight;
+      win.style.left = Math.min(Math.max(8, x), Math.max(8, innerWidth - w - 8)) + "px";
+      win.style.top = Math.min(Math.max(8, y), Math.max(8, innerHeight - h - 8)) + "px";
+    }
+
+    let drag = null;
+    grip.addEventListener("pointerdown", (e) => {
+      if (e.target.closest("button")) return;
+      drag = { dx: e.clientX - win.offsetLeft, dy: e.clientY - win.offsetTop };
+      grip.setPointerCapture(e.pointerId);
+      win.classList.add("dragging");
+    });
+    grip.addEventListener("pointermove", (e) => { if (drag) place(e.clientX - drag.dx, e.clientY - drag.dy); });
+    const endDrag = () => { drag = null; win.classList.remove("dragging"); };
+    grip.addEventListener("pointerup", endDrag);
+    grip.addEventListener("pointercancel", endDrag);
+    addEventListener("resize", () => { if (!win.hidden) place(win.offsetLeft, win.offsetTop); });
+
+    /* ---------- Choosing or dropping a file ---------- */
+
+    btn.addEventListener("click", () => fileIn.click());
+    fileIn.addEventListener("change", () => { if (fileIn.files[0]) upload(fileIn.files[0]); fileIn.value = ""; });
+
+    const hasFiles = (e) => e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files");
+
+    let depth = 0;
+    win.addEventListener("dragenter", (e) => { if (hasFiles(e)) { depth++; win.classList.add("over"); } });
+    win.addEventListener("dragleave", () => { depth = Math.max(0, depth - 1); if (!depth) win.classList.remove("over"); });
+
+    // Stop the browser from opening a dropped file; a drop anywhere also opens the window
+    document.addEventListener("dragover", (e) => { if (hasFiles(e)) e.preventDefault(); });
+    document.addEventListener("drop", (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      depth = 0; win.classList.remove("over");
+      const f = e.dataTransfer.files[0];
+      if (!f) return;
+      openUpload();
+      upload(f);
+    });
+
+    /* ---------- Uploading ---------- */
+
+    function sendRaw(host, file, onProgress) {
+      return new Promise((resolve, reject) => {
+        const r = host.raw(file);
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", r.url);
+        Object.entries(r.headers).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+        xhr.timeout = 15 * 60 * 1000;
+        xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+        xhr.onerror = () => reject(new Error(host.name + " unreachable"));
+        xhr.ontimeout = () => reject(new Error(host.name + " timed out"));
+        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve(r.link) : reject(new Error(host.name + " " + xhr.status + " " + xhr.responseText.slice(0, 120))));
+        xhr.send(file);
+      });
+    }
+
+    function sendTo(host, file, onProgress) {
+      if (host.raw) return sendRaw(host, file, onProgress);
+      return new Promise((resolve, reject) => {
+        const fd = new FormData();
+        Object.entries(host.extra || {}).forEach(([k, v]) => fd.append(k, v));
+        fd.append(host.field, file, file.name);
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", host.url);
+        xhr.timeout = 15 * 60 * 1000;
+        xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+        xhr.onerror = () => reject(new Error(host.name + " unreachable"));
+        xhr.ontimeout = () => reject(new Error(host.name + " timed out"));
+        xhr.onload = () => {
+          if (xhr.status < 200 || xhr.status >= 300) return reject(new Error(host.name + " " + xhr.status));
+          try {
+            const url = host.parse(xhr.responseText);
+            url ? resolve(url) : reject(new Error(host.name + " sent no link"));
+          } catch (_) { reject(new Error(host.name + " reply not understood")); }
+        };
+        xhr.send(fd);
+      });
+    }
+
+    async function upload(file) {
+      if (busy) { note.textContent = "Hang on, still uploading."; return; }
+      busy = true; link = "";
+      btn.disabled = true; share.hidden = true; share.classList.remove("copied"); share.textContent = "Share";
+      sub.hidden = true; prog.hidden = false; note.textContent = "";
+      nameEl.textContent = `${file.name} · ${size(file.size)}`;
+      bar.style.width = "0%"; barWrap.classList.add("busy");
+
+      let ok = false, temporary = false;
+      for (const host of HOSTS) {
+        if (host.max && file.size > host.max) continue;
+        try {
+          bar.style.width = "0%";
+          link = await sendTo(host, file, (p) => { bar.style.width = Math.round(p * 100) + "%"; });
+          ok = true; temporary = !!host.temporary; break;
+        } catch (err) { console.warn("Upload failed:", err.message); }
+      }
+
+      busy = false; btn.disabled = false; barWrap.classList.remove("busy");
+      if (ok) {
+        bar.style.width = "100%";
+        share.hidden = false;
+        note.textContent = temporary
+          ? "Uploaded. Anyone with the link can download it. It's a temporary link, so share it soon."
+          : "Uploaded. Anyone with the link can download it.";
+        share.focus({ preventScroll: true });
+      } else {
+        prog.hidden = true; sub.hidden = false;
+        note.textContent = "Couldn't upload right now. The free file hosts may be busy or blocking this page. Try again in a moment.";
+      }
+    }
+
+    /* ---------- Share: copy the link ---------- */
+
+    async function copy(text) {
+      try { await navigator.clipboard.writeText(text); return true; }
+      catch (_) {
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = text; ta.style.cssText = "position:fixed;opacity:0;top:0;left:0";
+          document.body.appendChild(ta); ta.select();
+          const done = document.execCommand("copy"); ta.remove(); return done;
+        } catch (__) { return false; }
+      }
+    }
+
+    share.addEventListener("click", async () => {
+      if (!link) return;
+      if (await copy(link)) {
+        share.textContent = "Link copied"; share.classList.add("copied");
+        toast("Link copied. Paste it in any browser to download the file.");
+        setTimeout(() => { share.textContent = "Share"; share.classList.remove("copied"); }, 2500);
+      } else {
+        note.textContent = link;                         // clipboard blocked: show the link to copy by hand
+        const r = document.createRange(); r.selectNodeContents(note);
+        const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+      }
+    });
+  })();
+  </script>
 </body>
 </html>

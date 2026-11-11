@@ -46,6 +46,10 @@
     "night-city-part2.mp4",
   ];
 
+  // Backgrounds. The first one is built in; videos you drop into the
+  // Backgrounds folder are added after it automatically.
+  const BGS = [{ id: "night-city", name: "Night city", parts: VIDEO_PARTS }];
+
   const IDLE_MS = 4000;
   const STORE_KEY = "quiet-hours:v1";
 
@@ -60,12 +64,13 @@
     settingsBtn: $("settingsBtn"), settings: $("settings"), sleepDot: $("sleepDot"),
     sleepHint: $("sleepHint"), clockToggle: $("clockToggle"), videoToggle: $("videoToggle"),
     begin: $("begin"), toast: $("toast"),
+    bgSelect: $("bgSelect"), trackList: $("trackList"), trackCount: $("trackCount"),
   };
 
   /* ---------- Saved settings ---------- */
 
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const state = { volume: 0.6, muted: false, dim: 0.2, clock: true, video: !reducedMotion };
+  const state = { volume: 0.6, muted: false, dim: 0.2, clock: true, video: !reducedMotion, bg: "night-city" };
 
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
@@ -75,7 +80,7 @@
   function save() {
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify({
-        volume: state.volume, muted: state.muted, dim: state.dim, clock: state.clock, video: state.video,
+        volume: state.volume, muted: state.muted, dim: state.dim, clock: state.clock, video: state.video, bg: state.bg,
       }));
     } catch (_) { /* ignore */ }
   }
@@ -143,6 +148,7 @@
     els.artist.textContent = t.artist;
     els.now.textContent = t.title;
     document.title = `${t.title} · Quiet hours`;
+    renderTracks();
     if ("mediaSession" in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: t.title,
@@ -163,6 +169,7 @@
 
   // Jump to a point (in seconds) anywhere in the current track, switching parts if needed
   function seekTo(t, keepPlaying = !audio.paused) {
+    if (!total()) return;
     t = Math.min(Math.max(0, t), total() - 1);
     let p = 0;
     while (p < TRACKS[index].parts.length - 1 && t >= partStart(p + 1)) p++;
@@ -238,7 +245,7 @@
     failures++;
     if (failures >= TRACKS.length) {
       setPlaying(false);
-      toast("Couldn't load the music. Check the file names in audio.");
+      toast("Couldn't load the music. Check that the music files are uploaded.");
       return;
     }
     toast("Skipping a track that wouldn't load.");
@@ -252,14 +259,19 @@
   function updateProgress() {
     const d = total();
     els.times.textContent = `${fmt(elapsed())} / ${fmt(d)}`;
-    if (!seeking) {
+    if (!seeking && d > 0) {
       els.seek.value = Math.round((elapsed() / d) * 1000);
       setFill(els.seek);
     }
   }
 
   audio.addEventListener("timeupdate", updateProgress);
-  audio.addEventListener("loadedmetadata", updateProgress);
+  audio.addEventListener("loadedmetadata", () => {
+    // Tracks found automatically don't come with a length; read it from the file
+    const p = TRACKS[index].parts[part];
+    if (!p.duration && isFinite(audio.duration)) p.duration = audio.duration;
+    updateProgress();
+  });
 
   els.seek.addEventListener("input", () => {
     seeking = true;
@@ -322,25 +334,78 @@
   const playVideo = () => activeVideo().play().catch(() => {});
   const pauseVideo = () => activeVideo().pause();
 
+  let bgIndex = 0, bgBusy = false;
+
+  // Line up the idle element with the part that comes after the current one
+  function prepareSpare() {
+    const spare = videos[1 - vi], parts = BGS[bgIndex].parts;
+    spare.loop = false;
+    if (parts.length > 1) { spare.src = parts[(vp + 1) % parts.length]; spare.load(); }
+    else { spare.removeAttribute("src"); spare.load(); }
+  }
+
+  // Show background i. The first call just starts it; later calls fade from the old one.
+  function loadBackground(i, instant = false, onShown) {
+    const parts = BGS[i].parts, prevIndex = bgIndex;
+    if (!instant && bgBusy) return;
+    bgIndex = i; vp = 0;
+    const old = videos[vi];
+    const neu = instant ? old : videos[1 - vi];
+    neu.loop = parts.length === 1;
+    if (i === 0) neu.setAttribute("poster", "poster.jpg"); else neu.removeAttribute("poster");
+    neu.src = parts[0];
+    neu.load();
+    if (instant) {
+      prepareSpare();
+      if (i !== 0) {                    // a saved background that has since been deleted: fall back
+        neu.addEventListener("error", () => {
+          toast("A saved background is missing, so Night city is back.");
+          state.bg = BGS[0].id; save();
+          loadBackground(0, true);
+          if (state.video) playVideo();
+          renderBackgrounds();
+        }, { once: true });
+      }
+      return;
+    }
+
+    bgBusy = true;
+    const done = () => { bgBusy = false; };
+    const timer = setTimeout(done, 10000);
+    neu.addEventListener("error", () => {
+      clearTimeout(timer); done(); bgIndex = prevIndex;
+      if (els.bgSelect) els.bgSelect.value = String(prevIndex);
+      toast("That background wouldn't load.");
+    }, { once: true });
+    neu.addEventListener("loadeddata", () => {
+      clearTimeout(timer);
+      neu.classList.add("on"); old.classList.remove("on");
+      vi = 1 - vi;
+      if (state.video) playVideo();
+      if (onShown) onShown();
+      setTimeout(() => { old.pause(); prepareSpare(); done(); }, 1000);
+    }, { once: true });
+  }
+
   function setupVideo() {
     videos.forEach((v) => { v.muted = true; });
-    videos[0].src = VIDEO_PARTS[0];
-    videos[1].src = VIDEO_PARTS[1 % VIDEO_PARTS.length];
-    videos[1].load();
     videos.forEach((v, n) => v.addEventListener("ended", () => {
       if (n !== vi) return;
+      const parts = BGS[bgIndex].parts;
       const cur = videos[vi], nxt = videos[1 - vi];
       vi = 1 - vi;
-      vp = (vp + 1) % VIDEO_PARTS.length;
+      vp = (vp + 1) % parts.length;
       nxt.currentTime = 0;
       nxt.play().catch(() => {});
       nxt.classList.add("on");
       cur.classList.remove("on");
       setTimeout(() => {              // line up the part after next
-        cur.src = VIDEO_PARTS[(vp + 1) % VIDEO_PARTS.length];
+        cur.src = parts[(vp + 1) % parts.length];
         cur.load();
       }, 1500);
     }));
+    const want = BGS.findIndex((b) => b.id === state.bg);
+    loadBackground(want >= 0 ? want : 0, true);
   }
 
   function syncVideo() {
@@ -387,6 +452,124 @@
   }
 
   setInterval(() => { updateClock(); checkSleep(); }, 1000);
+
+  /* ---------- Playlist and background lists in the settings panel ---------- */
+
+  function renderTracks() {
+    if (!els.trackList) return;
+    els.trackList.textContent = "";
+    TRACKS.forEach((t, i) => {
+      const li = document.createElement("li"), b = document.createElement("button");
+      b.type = "button"; b.textContent = t.title;
+      if (i === index) b.setAttribute("aria-current", "true");
+      b.addEventListener("click", () => goTo(i));
+      li.appendChild(b); els.trackList.appendChild(li);
+    });
+    els.trackCount.textContent = `(${TRACKS.length})`;
+  }
+
+  function renderBackgrounds() {
+    if (!els.bgSelect) return;
+    els.bgSelect.textContent = "";
+    BGS.forEach((b, i) => {
+      const o = document.createElement("option");
+      o.value = String(i); o.textContent = b.name;
+      els.bgSelect.appendChild(o);
+    });
+    els.bgSelect.value = String(bgIndex);
+  }
+
+  function chooseBackground(i) {
+    if (bgBusy || i === bgIndex) { if (els.bgSelect) els.bgSelect.value = String(bgIndex); return false; }
+    loadBackground(i, false, () => { state.bg = BGS[i].id; save(); });   // remembered once it has really loaded
+    if (els.bgSelect) els.bgSelect.value = String(i);
+    return true;
+  }
+  if (els.bgSelect) els.bgSelect.addEventListener("change", () => chooseBackground(Number(els.bgSelect.value)));
+
+  function nextBackground() {
+    if (BGS.length < 2) { toast("Put videos in the Backgrounds folder to add more."); return; }
+    const i = (bgIndex + 1) % BGS.length;
+    if (chooseBackground(i)) toast(BGS[i].name);
+  }
+
+  /* ---------- Auto-discovery: Media and Backgrounds folders ---------- */
+  // GitHub Pages can't list a folder, so the page asks GitHub's public API what is in
+  // the repository. This works on name.github.io sites. On a custom domain, set
+  // window.QUIET_REPO = "owner/repo" in index.html.
+
+  const AUDIO_EXT = /\.(mp3|m4a|aac|ogg|oga|opus|wav|flac)$/i;
+  const VIDEO_EXT = /\.(mp4|webm|m4v)$/i;
+  const FOUND_KEY = "quiet-hours:found:v1";
+  const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+  const prettyName = (file) =>
+    file.replace(/\.[^.]+$/, "").replace(/^\d+[\s._-]+/, "").replace(/_+/g, " ").replace(/\s+/g, " ").trim() || file;
+  const urlFor = (dir, file) => `${encodeURIComponent(dir)}/${encodeURIComponent(file)}`;
+
+  function repoInfo() {
+    if (window.QUIET_REPO && window.QUIET_REPO.includes("/")) return window.QUIET_REPO.split("/");
+    const m = location.hostname.match(/^([^.]+)\.github\.io$/i);
+    if (!m) return null;
+    const first = location.pathname.split("/").filter(Boolean)[0];
+    const isFile = !first || /\.[a-z0-9]+$/i.test(first);      // "/" or "/index.html" means the user site
+    return [m[1], isFile ? `${m[1]}.github.io` : first];
+  }
+
+  function readFound() {
+    try { return JSON.parse(localStorage.getItem(FOUND_KEY) || "null"); } catch (_) { return null; }
+  }
+
+  async function fetchFound() {
+    const info = repoInfo();
+    if (!info) return null;
+    const api = `https://api.github.com/repos/${info[0]}/${info[1]}/contents`;
+    const get = async (path) => {
+      const r = await fetch(api + path, { headers: { Accept: "application/vnd.github+json" } });
+      if (!r.ok) throw new Error("GitHub " + r.status);
+      return r.json();
+    };
+    const root = await get("");
+    const dirOf = (re) => (root.find((f) => f.type === "dir" && re.test(f.name)) || {}).name;
+    const mediaDir = dirOf(/^media$/i), bgDir = dirOf(/^backgrounds?$/i);
+    const list = async (dir, ext) => dir
+      ? (await get("/" + encodeURIComponent(dir))).filter((f) => f.type === "file" && ext.test(f.name)).map((f) => f.name).sort(collator.compare)
+      : [];
+    return { t: Date.now(), mediaDir, bgDir, media: await list(mediaDir, AUDIO_EXT), bg: await list(bgDir, VIDEO_EXT) };
+  }
+
+  function applyFound(f) {
+    if (!f) return false;
+    let changed = false;
+    (f.media || []).forEach((name) => {
+      const src = urlFor(f.mediaDir, name);
+      if (TRACKS.some((t) => t.parts[0].src === src)) return;
+      TRACKS.push({ title: prettyName(name), artist: "", parts: [{ src, duration: 0 }] });
+      changed = true;
+    });
+    (f.bg || []).forEach((name) => {
+      const src = urlFor(f.bgDir, name);
+      if (BGS.some((b) => b.id === src)) return;
+      BGS.push({ id: src, name: prettyName(name), parts: [src] });
+      changed = true;
+    });
+    if (changed) { renderTracks(); renderBackgrounds(); }
+    return changed;
+  }
+
+  async function refreshFound() {
+    const cached = readFound();
+    if (cached && Date.now() - cached.t < 5 * 60 * 1000) return;      // checked a moment ago
+    try {
+      const f = await fetchFound();
+      if (!f) return;
+      try { localStorage.setItem(FOUND_KEY, JSON.stringify(f)); } catch (_) { /* ignore */ }
+      applyFound(f);
+      const want = BGS.findIndex((b) => b.id === state.bg);          // restore a saved choice that just appeared
+      if (want > 0 && want !== bgIndex) loadBackground(want);
+      if (els.bgSelect) els.bgSelect.value = String(bgIndex);
+    } catch (err) { console.warn("Couldn't check the Media and Backgrounds folders:", err.message); }
+  }
 
   /* ---------- Settings panel ---------- */
 
@@ -463,6 +646,7 @@
       case "p": prev(); break;
       case "m": state.muted = !state.muted; syncVolumeUI(); save(); break;
       case "f": toggleFullscreen(); break;
+      case "b": nextBackground(); break;
       case "arrowright": if (!onSlider) { e.preventDefault(); skip(10); } break;
       case "arrowleft": if (!onSlider) { e.preventDefault(); skip(-10); } break;
       case "arrowup": if (!onSlider) { e.preventDefault(); setVolume(state.volume + 0.05); } break;
@@ -509,10 +693,13 @@
   els.next.addEventListener("click", next);
   els.play.addEventListener("click", togglePlay);
 
+  applyFound(readFound());              // last known contents of Media and Backgrounds, instantly
   setupVideo();
+  renderBackgrounds();
   syncVolumeUI(); syncDim(); syncClock(); syncVideo(); updateClock();
   loadTrack(0);
   setPlaying(false);
+  refreshFound();                       // then check for new files
 
   // If the browser allows sound without a click (some do for returning visitors), skip the entry screen
   audio.volume = 0;
